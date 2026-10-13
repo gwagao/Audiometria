@@ -1,0 +1,11 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Datos de pacientes guardados por el backend
+backend/data/
+
+# Binarios compilados
+*.apk
