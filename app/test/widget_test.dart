@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:audiometria/analysis.dart';
 import 'package:audiometria/calibration.dart';
 import 'package:audiometria/models.dart';
+import 'package:audiometria/pdf_report.dart';
 import 'package:audiometria/threshold_search.dart';
 import 'package:audiometria/widgets/audiogram_chart.dart';
 import 'package:flutter/material.dart';
@@ -129,6 +130,28 @@ void main() {
         jsonDecode(jsonEncode(original.toJson())) as Map<String, dynamic>);
     expect(jsonEncode(copy.toJson()), jsonEncode(original.toJson()));
     expect(copy.thresholds.last.noResponse, isTrue);
+  });
+
+  test('observaciones: asimetría y falsos positivos', () {
+    final base = sampleResult();
+    final result = AudiometryResult(
+      patient: base.patient,
+      performedAt: base.performedAt,
+      device: base.device,
+      thresholds: base.thresholds,
+      falsePositives: 3,
+    );
+    final notes = observations(result);
+    expect(notes.any((n) => n.startsWith('Asimetría')), isTrue);
+    expect(notes.any((n) => n.contains('3 respuestas sin tono')), isTrue);
+  });
+
+  testWidgets('genera el informe PDF en el teléfono', (tester) async {
+    final bytes = await tester.runAsync(
+        () => buildReportPdf(sampleResult().withNotes('Refiere zumbido <ocasional> & más')));
+    expect(bytes, isNotNull);
+    expect(String.fromCharCodes(bytes!.take(5)), '%PDF-');
+    expect(bytes.length, greaterThan(20000)); // incluye la imagen del audiograma
   });
 
   testWidgets('el audiograma se dibuja sin errores', (tester) async {

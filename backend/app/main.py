@@ -1,22 +1,14 @@
+"""API opcional: historial de pruebas y análisis. El informe PDF lo genera la app."""
+
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import Response
 
 from . import storage
 from .analysis import analyze
 from .charts import render_audiogram
-from .report import build_pdf
 from .schemas import Analysis, AudiometryResult, SessionCreated, SessionInfo
 
-app = FastAPI(title="Audiometría API", version="1.0.0")
-
-
-def _pdf_response(result: AudiometryResult) -> Response:
-    filename = f"audiometria_{result.performed_at:%Y%m%d_%H%M}.pdf"
-    return Response(
-        build_pdf(result),
-        media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-    )
+app = FastAPI(title="Audiometría API", version="1.1.0")
 
 
 def _load(session_id: str) -> AudiometryResult:
@@ -41,15 +33,6 @@ def audiogram_png(result: AudiometryResult) -> Response:
     return Response(render_audiogram(result), media_type="image/png")
 
 
-@app.post("/api/v1/report.pdf")
-def report_pdf(result: AudiometryResult, save: bool = Query(default=False)) -> Response:
-    """Genera el informe PDF; con ?save=true además guarda la prueba en el historial."""
-    response = _pdf_response(result)
-    if save:
-        response.headers["X-Session-Id"] = storage.save(result)
-    return response
-
-
 @app.post("/api/v1/sessions", response_model=SessionCreated, status_code=201)
 def create_session(result: AudiometryResult) -> SessionCreated:
     return SessionCreated(id=storage.save(result), analysis=analyze(result))
@@ -65,9 +48,9 @@ def get_session(session_id: str) -> AudiometryResult:
     return _load(session_id)
 
 
-@app.get("/api/v1/sessions/{session_id}/report.pdf")
-def session_report(session_id: str) -> Response:
-    return _pdf_response(_load(session_id))
+@app.get("/api/v1/sessions/{session_id}/audiogram.png")
+def session_audiogram(session_id: str) -> Response:
+    return Response(render_audiogram(_load(session_id)), media_type="image/png")
 
 
 @app.delete("/api/v1/sessions/{session_id}", status_code=204)

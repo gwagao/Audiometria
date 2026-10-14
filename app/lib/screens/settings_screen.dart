@@ -85,8 +85,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            Text('Servidor de informes', style: theme.textTheme.titleMedium),
-            const SizedBox(height: 8),
+            Text('Servidor (opcional)', style: theme.textTheme.titleMedium),
+            const SizedBox(height: 4),
+            const Text('El PDF se genera en el teléfono. El servidor solo se usa para '
+                'guardar una copia de las pruebas en el computador.'),
+            const SizedBox(height: 12),
             TextField(
               controller: _url,
               keyboardType: TextInputType.url,

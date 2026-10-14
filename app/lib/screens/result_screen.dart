@@ -5,6 +5,7 @@ import '../analysis.dart';
 import '../api_client.dart';
 import '../app_state.dart';
 import '../models.dart';
+import '../pdf_report.dart';
 import '../widgets/audiogram_chart.dart';
 
 /// Audiograma, resumen y opciones para generar el PDF y compartir.
@@ -21,6 +22,7 @@ class _ResultScreenState extends State<ResultScreen> {
   late AudiometryResult _result = widget.result;
   late final _notes = TextEditingController(text: widget.result.notes ?? '');
   bool _busy = false;
+  bool _uploading = false;
 
   @override
   void dispose() {
@@ -35,25 +37,41 @@ class _ResultScreenState extends State<ResultScreen> {
     await AppState.instance.saveResult(_result);
   }
 
+  void _message(String text) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(text), duration: const Duration(seconds: 6)));
+  }
+
   Future<void> _sharePdf() async {
     setState(() => _busy = true);
     try {
       await _saveNotes();
-      final file =
-          await ApiClient(AppState.instance.settings.backendUrl).downloadReport(_result);
+      final file = await saveReportPdf(_result);
       await SharePlus.instance.share(ShareParams(
         files: [XFile(file.path, mimeType: 'application/pdf')],
         subject: 'Audiometría de ${_result.patient.name}',
         text: 'Informe de audiometría de ${_result.patient.name} '
             '(${formatDateTime(_result.performedAt)}).',
       ));
-    } on ApiException catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(e.message), duration: const Duration(seconds: 6)));
-      }
+    } catch (e) {
+      _message('No se pudo generar el PDF: $e');
     } finally {
       if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  /// Opcional: guarda una copia en el historial del backend Python.
+  Future<void> _uploadToServer() async {
+    setState(() => _uploading = true);
+    try {
+      await _saveNotes();
+      await ApiClient(AppState.instance.settings.backendUrl).saveSession(_result);
+      _message('Copia guardada en el servidor.');
+    } on ApiException catch (e) {
+      _message(e.message);
+    } finally {
+      if (mounted) setState(() => _uploading = false);
     }
   }
 
@@ -126,6 +144,15 @@ class _ResultScreenState extends State<ResultScreen> {
               icon: const Icon(Icons.share),
               label: const Text('Compartir resumen en texto'),
               onPressed: _shareText,
+            ),
+            const SizedBox(height: 4),
+            TextButton.icon(
+              icon: _uploading
+                  ? const SizedBox(
+                      width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.cloud_upload_outlined),
+              label: const Text('Guardar copia en el servidor (opcional)'),
+              onPressed: _uploading ? null : _uploadToServer,
             ),
             const SizedBox(height: 16),
             Text(

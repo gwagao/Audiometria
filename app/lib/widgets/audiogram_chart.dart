@@ -1,4 +1,6 @@
 import 'dart:math' as math;
+import 'dart:typed_data';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 
@@ -6,6 +8,30 @@ import '../models.dart';
 
 const rightEarColor = Color(0xFFD32F2F);
 const leftEarColor = Color(0xFF1565C0);
+
+/// Dibuja el audiograma como imagen PNG (para el informe PDF).
+Future<Uint8List> renderAudiogramPng(
+  List<ThresholdPoint> thresholds, {
+  Size size = const Size(460, 400),
+  double pixelRatio = 3,
+}) async {
+  final recorder = ui.PictureRecorder();
+  final canvas = Canvas(recorder)
+    ..scale(pixelRatio)
+    ..drawRect(Offset.zero & size, Paint()..color = Colors.white);
+  _AudiogramPainter(thresholds, const TextStyle(fontSize: 11, color: Colors.black87))
+      .paint(canvas, size);
+  final image = await recorder.endRecording().toImage(
+        (size.width * pixelRatio).round(),
+        (size.height * pixelRatio).round(),
+      );
+  try {
+    final data = await image.toByteData(format: ui.ImageByteFormat.png);
+    return data!.buffer.asUint8List();
+  } finally {
+    image.dispose();
+  }
+}
 
 /// Audiograma con la simbología convencional: O rojo = derecho, X azul = izquierdo.
 class AudiogramChart extends StatelessWidget {

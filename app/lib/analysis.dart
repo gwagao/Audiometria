@@ -1,6 +1,8 @@
+import 'dart:math' as math;
+
 import 'models.dart';
 
-/// Espejo de backend/app/analysis.py para mostrar el resumen sin conexión.
+/// Mismos criterios que backend/app/analysis.py.
 const ptaFrequenciesHz = [500, 1000, 2000, 4000];
 const minPtaFrequencies = 3;
 
@@ -55,6 +57,44 @@ EarSummary summarizeEar(AudiometryResult result, Ear ear) {
     isLowerBound: points.any((t) => t.noResponse),
     category: classify(pta),
   );
+}
+
+const asymmetryDb = 15;
+
+/// Hallazgos que merecen mención en el informe.
+List<String> observations(AudiometryResult result) {
+  final right = summarizeEar(result, Ear.right);
+  final left = summarizeEar(result, Ear.left);
+  final notes = <String>[];
+
+  if (right.ptaDbHl != null && left.ptaDbHl != null) {
+    final diff = (right.ptaDbHl! - left.ptaDbHl!).abs();
+    if (diff >= asymmetryDb) {
+      final worse = right.ptaDbHl! > left.ptaDbHl! ? 'derecho' : 'izquierdo';
+      notes.add('Asimetría entre oídos de ${diff.toStringAsFixed(0)} dB en el promedio '
+          'tonal (peor oído: $worse). Se recomienda evaluación profesional.');
+    }
+  }
+
+  for (final summary in [right, left]) {
+    final name = summary.ear.label.toLowerCase();
+    if (summary.isLowerBound) {
+      notes.add('En el $name hubo frecuencias sin respuesta al nivel máximo; '
+          'el promedio real es igual o mayor al indicado.');
+    }
+    final high = result.byEar(summary.ear).where((t) => t.frequencyHz >= 4000);
+    if (summary.category == categories.first &&
+        high.isNotEmpty &&
+        high.map((t) => t.thresholdDbHl).reduce(math.max) >= 35) {
+      notes.add('Caída en frecuencias agudas en el $name pese a un promedio normal.');
+    }
+  }
+
+  if (result.falsePositives >= 3) {
+    notes.add('Se registraron ${result.falsePositives} respuestas sin tono presente; '
+        'la fiabilidad de la prueba puede ser reducida.');
+  }
+  return notes;
 }
 
 String summaryText(AudiometryResult result) {

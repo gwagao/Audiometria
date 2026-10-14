@@ -73,18 +73,16 @@ def test_audiogram_png(client):
     assert r.content.startswith(b"\x89PNG")
 
 
-def test_report_pdf(client):
-    r = client.post("/api/v1/report.pdf", json=make_payload(notes="Paciente con <tinnitus> & vértigo"))
-    assert r.status_code == 200
-    assert r.headers["content-type"] == "application/pdf"
-    assert r.content.startswith(b"%PDF")
-    assert "x-session-id" not in r.headers
-    assert client.get("/api/v1/sessions").json() == []
+def test_pdf_endpoints_removed(client):
+    # El informe PDF ahora se genera en el teléfono.
+    assert client.post("/api/v1/report.pdf", json=make_payload()).status_code == 404
 
 
-def test_report_pdf_with_save_and_session_roundtrip(client):
-    r = client.post("/api/v1/report.pdf?save=true", json=make_payload())
-    session_id = r.headers["x-session-id"]
+def test_session_roundtrip(client):
+    r = client.post("/api/v1/sessions", json=make_payload(notes="Paciente con <tinnitus> & vértigo"))
+    assert r.status_code == 201
+    session_id = r.json()["id"]
+    assert r.json()["analysis"]["left"]["category"] == "mild"
 
     sessions = client.get("/api/v1/sessions").json()
     assert [s["id"] for s in sessions] == [session_id]
@@ -93,8 +91,8 @@ def test_report_pdf_with_save_and_session_roundtrip(client):
     stored = client.get(f"/api/v1/sessions/{session_id}").json()
     assert len(stored["thresholds"]) == 12
 
-    pdf = client.get(f"/api/v1/sessions/{session_id}/report.pdf")
-    assert pdf.content.startswith(b"%PDF")
+    png = client.get(f"/api/v1/sessions/{session_id}/audiogram.png")
+    assert png.content.startswith(b"\x89PNG")
 
     assert client.delete(f"/api/v1/sessions/{session_id}").status_code == 204
     assert client.get(f"/api/v1/sessions/{session_id}").status_code == 404
